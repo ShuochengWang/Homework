@@ -86,5 +86,43 @@ object App {
     println("rank in the world: " + rank_in_world)
     println("rank in China: " + rank_in_china)
 
+
+    val vertex_rdd: VertexRDD[List[Long]] = graph.aggregateMessages[List[Long]](
+      // Map Function
+      triplet => {
+        triplet.sendToSrc(List(triplet.dstId))
+      },
+      // Reduce Function
+      (a, b) => a ++ b
+    )
+
+    val sort_vertex_rdd = vertex_rdd.map(row => (row._1, row._2.sorted)).join(graph.vertices)
+    val default_vertex_property = (List(), ("Missing", "Missing"))
+    val graph2 = Graph(sort_vertex_rdd, graph.edges, default_vertex_property)
+
+    def sorted_list_intersection(a: List[Long], b: List[Long]): List[Long] ={
+      if(a == null || b == null) return List[Long]()
+      var ap = 0
+      var bp = 0
+      var res = List[Long]()
+      while(ap < a.length && bp < b.length){
+        if(a(ap) == b(bp)){
+          res = a(ap) :: res
+          ap += 1
+          bp += 1
+        }
+        else if(a(ap) < b(bp)){
+          ap += 1
+        }
+        else{
+          bp += 1
+        }
+      }
+      res
+    }
+
+    val graph3 = graph2.mapTriplets(t => (t.attr, sorted_list_intersection(t.srcAttr._1, t.dstAttr._1)))
+    graph3.edges.coalesce(1,true).saveAsTextFile("common-friends-result")
+
   }
 }
